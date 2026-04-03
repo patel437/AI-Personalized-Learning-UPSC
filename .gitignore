@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+venv/
+.env
+backend/data/raw/*.csv
+backend/data/processed/*.csv
+ml_models/saved_models/*.pkl
+node_modules/
