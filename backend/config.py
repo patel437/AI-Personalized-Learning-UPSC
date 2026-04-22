@@ -12,8 +12,12 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG = False
     TESTING = False
+    ENV = os.environ.get('FLASK_ENV', 'development')
     
-    # Database settings - FIXED: Changed SQLALCHEMY_DATABASE_URL to SQLALCHEMY_DATABASE_URI
+    # API prefix
+    API_PREFIX = '/api/v1'
+    
+    # Database settings
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///upsc_learning.db')
     
@@ -67,6 +71,7 @@ class Config:
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
+    ENV = 'development'
     SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL', 'sqlite:///upsc_learning_dev.db')
     SQLALCHEMY_ECHO = True
 
@@ -75,6 +80,7 @@ class TestingConfig(Config):
     """Testing configuration"""
     TESTING = True
     DEBUG = True
+    ENV = 'testing'
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
 
@@ -83,6 +89,7 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     TESTING = False
+    ENV = 'production'
     
     # In production, these must be set in environment
     SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -91,7 +98,7 @@ class ProductionConfig(Config):
     if not SECRET_KEY:
         raise ValueError("SECRET_KEY must be set in production")
     if not JWT_SECRET_KEY:
-        raise ValueError("JWT_SECRET_KEY must be set in production")  # FIXED: Corrected typo
+        raise ValueError("JWT_SECRET_KEY must be set in production")
     
     # Use PostgreSQL in production
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
@@ -103,7 +110,7 @@ class ProductionConfig(Config):
 
 
 # Configuration dictionary
-config = {
+config_dict = {
     'development': DevelopmentConfig,
     'testing': TestingConfig,
     'production': ProductionConfig,
@@ -111,17 +118,39 @@ config = {
 }
 
 
-def get_config():
-    """Get configuration based on environment"""
-    env = os.environ.get('FLASK_ENV', 'default')
-    return config.get(env, config['default'])
+def get_config(config_name=None):
+    """
+    Get configuration based on environment name
+    
+    Args:
+        config_name: Name of the configuration ('development', 'testing', 'production')
+    
+    Returns:
+        Configuration class instance
+    """
+    if config_name is None:
+        config_name = os.environ.get('FLASK_ENV', 'default')
+    
+    config_class = config_dict.get(config_name, config_dict['default'])
+    return config_class()
 
 
-# Only run this when the script is executed directly (not imported)
+# For direct testing (only runs when script is executed directly)
 if __name__ == "__main__":
-    # This allows testing the configuration
-    current_config = get_config()
-    print(f"Environment: {os.environ.get('FLASK_ENV', 'default')}")
-    print(f"Database URI: {current_config.SQLALCHEMY_DATABASE_URI}")
-    print(f"Debug mode: {current_config.DEBUG}")
-    print("Configuration loaded successfully!")
+    # Test different configurations
+    print("=" * 60)
+    print("CONFIGURATION TEST")
+    print("=" * 60)
+    
+    dev_config = get_config('development')
+    print(f"\n📝 Development Config:")
+    print(f"  - Debug: {dev_config.DEBUG}")
+    print(f"  - Environment: {dev_config.ENV}")
+    print(f"  - Database URI: {dev_config.SQLALCHEMY_DATABASE_URI}")
+    
+    test_config = get_config('testing')
+    print(f"\n🧪 Testing Config:")
+    print(f"  - Testing: {test_config.TESTING}")
+    print(f"  - Database URI: {test_config.SQLALCHEMY_DATABASE_URI}")
+    
+    print("\n✅ Configuration loaded successfully!")
