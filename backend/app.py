@@ -10,16 +10,16 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flasgger import Swagger
 
-# Add backend to path if needed
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory to path so that 'backend' module can be found
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import configurations
-from config import get_config
-from database.models import db
-from database.db_manager import DatabaseManager
-
-# Import services
-from models.recommendation_engine import UPSCRecommendationEngine
+# Now imports will work
+from backend.config import get_config
+from backend.database.models import db
+from backend.database.db_manager import DatabaseManager
+from backend.api.auth import auth_bp
+from backend.api.routes import api_bp
+from backend.models.recommendation_engine import UPSCRecommendationEngine
 
 
 def create_app(config_name=None):
@@ -34,16 +34,11 @@ def create_app(config_name=None):
     if config_name:
         app.config.from_object(get_config(config_name))
     else:
-        app.config.from_object(get_config(os.environ.get('FLASK_ENV', 'development')))
+        app.config.from_object(get_config(os.environ.get('FLASK_ENV', 'default')))
     
-    # Initialize extensions in correct order
-    # 1. First initialize db with app
-    db.init_app(app)
-    
-    # 2. Then CORS
+    # Initialize extensions
     CORS(app, origins=app.config['CORS_ORIGINS'])
-    
-    # 3. Then JWT
+    db.init_app(app)
     jwt = JWTManager(app)
     
     # Initialize Swagger for API documentation
@@ -54,10 +49,10 @@ def create_app(config_name=None):
             'description': app.config['API_DESCRIPTION'],
             'version': app.config['API_VERSION']
         },
-        'basePath': app.config.get('API_PREFIX', '/api/v1')
+        'basePath': app.config['API_PREFIX']
     })
     
-    # Initialize database manager (pass the app, but it won't re-init db)
+    # Initialize database manager
     db_manager = DatabaseManager(app)
     
     # Initialize recommendation engine
@@ -72,16 +67,11 @@ def create_app(config_name=None):
         print(f"⚠️ Could not load recommendation engine: {e}")
         app.recommendation_engine = None
     
-    # Create upload folder if it doesn't exist
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    # Register blueprints
+    app.register_blueprint(auth_bp, url_prefix=f"{app.config['API_PREFIX']}/auth")
+    app.register_blueprint(api_bp, url_prefix=app.config['API_PREFIX'])
     
-    # Create database tables
-    with app.app_context():
-        db.create_all()
-        print("✅ Database tables created/verified")
-    
-    # ==================== ERROR HANDLERS ====================
-    
+    # Error handlers
     @app.errorhandler(404)
     def not_found_error(error):
         return jsonify({
@@ -114,8 +104,7 @@ def create_app(config_name=None):
             'errors': [str(error)]
         }), 401
     
-    # ==================== JWT ERROR HANDLERS ====================
-    
+    # JWT error handlers
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
         return jsonify({
@@ -140,7 +129,13 @@ def create_app(config_name=None):
             'errors': [error]
         }), 401
     
-    # ==================== ROUTES ====================
+    # Create upload folder if it doesn't exist
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    
+    # Create database tables
+    with app.app_context():
+        db.create_all()
+        print("✅ Database tables created/verified")
     
     @app.route('/health', methods=['GET'])
     def health_check():
@@ -159,7 +154,8 @@ def create_app(config_name=None):
             'description': app.config['API_DESCRIPTION'],
             'version': app.config['API_VERSION'],
             'endpoints': {
-                'health': '/health',
+                'auth': f"{app.config['API_PREFIX']}/auth",
+                'api': f"{app.config['API_PREFIX']}",
                 'docs': '/apidocs'
             }
         }), 200
@@ -168,8 +164,8 @@ def create_app(config_name=None):
     print("🚀 UPSC Learning System API Started")
     print("="*60)
     print(f"Environment: {app.config.get('ENV', 'development')}")
-    print(f"Debug Mode: {app.config['DEBUG']}")
     print(f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    print(f"API Base URL: {app.config['API_PREFIX']}")
     print(f"API Docs: http://localhost:5000/apidocs")
     print("="*60)
     
