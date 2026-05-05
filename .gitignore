@@ -1,11 +1,65 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
 venv/
-.env
-backend/data/raw/*.csv
-backend/data/processed/*.csv
-ml_models/saved_models/*.pkl
-node_modules/
-.vscode/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
 # Database
 *.db
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ML Models
+*.pkl
+*.joblib
+*.h5
+*.pb
+
+# Logs
+*.log
+logs/
+
+# Uploads
+uploads/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend
+node_modules/
+build/
+dist/
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.key
+*.pem
+*.crt
+
+upsc_ai_learning.egg-info/
+dist/
