@@ -37,30 +37,29 @@ class UPSCPerformancePredictor:
         self.scaler = None
         
     def prepare_data(self, df, target_col='target'):
-        """
-        Prepare data for training
-        
-        Args:
-            df: DataFrame with features and target
-            target_col: Name of target column
+        """Prepare data with robust column checking"""
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
             
-        Returns:
-            X_train, X_test, y_train, y_test, feature_names
-        """
-        # Separate features and target
-        if target_col in df.columns:
-            y = df[target_col]
-            X = df.drop(columns=[target_col, 'student_id'], errors='ignore')
-        else:
-            raise ValueError(f"Target column '{target_col}' not found")
+        # Standardize columns: lowercase and strip spaces
+        df.columns = [str(c).lower().strip() for c in df.columns]
+        target_col = str(target_col).lower().strip()
+
+        if target_col not in df.columns:
+            available = list(df.columns)
+            raise ValueError(f"Target column '{target_col}' not found in: {available}")
         
-        # Remove non-numeric columns
-        numeric_cols = X.select_dtypes(include=[np.number]).columns
-        X = X[numeric_cols]
+        y = df[target_col]
+        # Safely drop non-feature columns
+        X = df.drop(columns=[target_col, 'student_id'], errors='ignore')
         
-        # Split data
+        # Keep only numeric features
+        X = X.select_dtypes(include=[np.number])
+        
+        # Split data (handle small datasets for testing)
+        stratify_y = y if len(np.unique(y)) > 1 and len(y) > 2 else None
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
+            X, y, test_size=0.2, random_state=42, stratify=stratify_y
         )
         
         return X_train, X_test, y_train, y_test, X.columns.tolist()

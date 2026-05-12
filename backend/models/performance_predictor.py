@@ -413,27 +413,22 @@ class PerformancePredictor:
         }
     
     def get_readiness_score(self, student_data):
-        """
-        Calculate overall exam readiness score
+        """Calculate readiness score safely using .get()"""
+        # Subject mapping to handle naming variations
+        gs_subjects = ['history', 'geography', 'polity', 'economy', 
+                      'science_tech', 'environment', 'current_affairs', 'art_culture']
         
-        Args:
-            student_data: Complete student data dictionary
+        gs_scores = []
+        for sub in gs_subjects:
+            # Try variations: 'history_score', 'gs_history', 'history'
+            val = student_data.get(f'{sub}_score') or student_data.get(f'gs_{sub}') or student_data.get(sub) or 0
+            gs_scores.append(float(val))
             
-        Returns:
-            Readiness score with breakdown
-        """
-        # Components and weights
-        components = {
-            'subject_knowledge': 0.4,
-            'mock_test_performance': 0.25,
-            'study_consistency': 0.2,
-            'time_management': 0.15
-        }
+        subject_knowledge = np.mean(gs_scores) if gs_scores else 0
         
-        # Calculate subject knowledge score
-        gs_subjects = ['history', 'geography', 'polity', 'economy', 'science_tech', 'environment', 'current_affairs', 'art_culture']
-        gs_scores = [student_data.get(f'{sub}_score', 0) for sub in gs_subjects]
-        subject_knowledge = np.mean(gs_scores)
+        # Components and weights
+        components = {'subject_knowledge': 0.4, 'mock_test_performance': 0.25, 
+                     'study_consistency': 0.2, 'time_management': 0.15}
         
         # Calculate mock test performance
         mock_tests = student_data.get('mock_tests_attempted', 0)
@@ -522,38 +517,5 @@ class PerformancePredictor:
         
         return recommendations
 
-
-# Example usage
-if __name__ == "__main__":
-    # Initialize predictor
-    predictor = PerformancePredictor()
-    
-    # Sample student data
-    sample_data = {
-        'history_score': 65,
-        'geography_score': 55,
-        'polity_score': 70,
-        'economy_score': 45,
-        'science_tech_score': 60,
-        'environment_score': 58,
-        'current_affairs_score': 62,
-        'art_culture_score': 50,
-        'comprehension_score': 70,
-        'logical_reasoning_score': 65,
-        'quantitative_score': 45,
-        'data_interpretation_score': 55,
-        'decision_making_score': 60,
-        'daily_study_hours': 6,
-        'mock_tests_attempted': 35,
-        'study_consistency': 75,
-        'preparation_months': 10
-    }
-    
-    # Get predictions
-    prelims_pred = predictor.predict_prelims_score(sample_data)
-    print("Prelims Score Prediction:", prelims_pred)
-    
-    readiness = predictor.get_readiness_score(sample_data)
-    print("Readiness Score:", readiness)
     
     print("\nPerformancePredictor class is ready to use!")

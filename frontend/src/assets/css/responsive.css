@@ -1,0 +1,85 @@
+/**
+ * Responsive Styles
+ * Mobile-first responsive design
+ */
+
+/* Mobile (up to 576px) */
+@media (max-width: 576px) {
+  :root {
+    --sidebar-width: 0px;
+    --header-height: 60px;
+  }
+  
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.125rem; }
+  
+  .container {
+    padding: 0 var(--spacing-md);
+  }
+  
+  .hide-on-mobile {
+    display: none;
+  }
+  
+  .card {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Tablet (577px - 768px) */
+@media (min-width: 577px) and (max-width: 768px) {
+  :root {
+    --sidebar-width: 220px;
+  }
+  
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.5rem; }
+  
+  .container {
+    padding: 0 var(--spacing-lg);
+  }
+  
+  .hide-on-tablet {
+    display: none;
+  }
+}
+
+/* Desktop (769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .container {
+    max-width: 960px;
+  }
+  
+  .hide-on-desktop {
+    display: none;
+  }
+}
+
+/* Large Desktop (1025px and above) */
+@media (min-width: 1025px) {
+  .container {
+    max-width: 1200px;
+  }
+  
+  .hide-on-large {
+    display: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}

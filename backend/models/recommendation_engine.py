@@ -289,41 +289,47 @@ class UPSCRecommendationEngine:
         
         return resources
     
-    def identify_weaknesses(self, student_data: pd.DataFrame) -> Dict:
+    def identify_weaknesses(self, student_data) -> Dict:
         """
-        Identify weak areas of a student based on their scores
-        
-        Args:
-            student_data: DataFrame containing student's scores and metrics
-            
-        Returns:
-            Dictionary with identified weaknesses
+        Identify weak areas with robust column checking for both DataFrame and Series
         """
         weaknesses = {}
         
+        # Ensure we can handle both DataFrame and Series (single row)
+        is_df = isinstance(student_data, pd.DataFrame)
+        # Convert DataFrame to dict if necessary
+        data = student_data.iloc[0].to_dict() if isinstance(student_data, pd.DataFrame) else student_data
         # Check GS subjects
         for subject in self.gs_subjects:
-            # Try different possible column names
+            # Handle naming mismatch for Science & Tech
+            sub_key = subject.lower()
+            if sub_key == 'science_technology':
+                sub_key = 'science_tech'
+                
             col_variations = [
-                f'gs_{subject.lower()}',
-                f'gs_{subject.lower()}_score',
-                f'{subject.lower()}_score',
-                f'gs_{subject.lower()}_pct'
+                f'gs_{sub_key}', f'gs_{sub_key}_score', 
+                f'{sub_key}_score', f'gs_{sub_key}_pct'
             ]
             
             score = None
             for col in col_variations:
-                if col in student_data.columns:
-                    score = student_data[col].values[0] if hasattr(student_data[col], 'values') else student_data[col]
-                    break
+                # Check existence safely
+                if (is_df and col in student_data.columns) or (not is_df and col in student_data):
+                    try:
+                        val = student_data[col]
+                        # Handle DataFrame vs Series indexing
+                        score = val.values[0] if hasattr(val, 'values') and is_df else val
+                        break
+                    except (KeyError, IndexError):
+                        continue
             
             if score is not None:
                 if score < 40:
-                    weaknesses[subject] = {'score': score, 'severity': 'High', 'priority': 1}
+                    weaknesses[subject] = {'score': float(score), 'severity': 'High', 'priority': 1}
                 elif score < 55:
-                    weaknesses[subject] = {'score': score, 'severity': 'Medium', 'priority': 2}
+                    weaknesses[subject] = {'score': float(score), 'severity': 'Medium', 'priority': 2}
                 elif score < 70:
-                    weaknesses[subject] = {'score': score, 'severity': 'Low', 'priority': 3}
+                    weaknesses[subject] = {'score': float(score), 'severity': 'Low', 'priority': 3}
         
         # Check CSAT subjects
         for subject in self.csat_subjects:

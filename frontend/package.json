@@ -1,0 +1,52 @@
+{
+  "name": "upsc-learning-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-Based Personalized Learning System for UPSC Aspirants",
+  "author": "UPSC Learning System Team",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.0",
+    "axios": "^1.4.0",
+    "chart.js": "^4.3.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-icons": "^4.10.1",
+    "react-toastify": "^9.1.3",
+    "react-loader-spinner": "^5.1.5",
+    "date-fns": "^2.30.0",
+    "react-helmet-async": "^2.0.4",
+    "react-modal": "^3.16.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/user-event": "^14.4.3",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^3.3.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:5000"
+}
