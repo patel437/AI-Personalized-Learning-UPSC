@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { storage } from './utils';
+import { cacheService } from '../../services/cacheService';
 
 // API Configuration
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
@@ -272,4 +273,64 @@ export default {
   analytics: analyticsAPI,
   prediction: predictionAPI,
   admin: adminAPI
+};
+
+// Add request deduplication
+const pendingRequests = new Map();
+
+const makeRequest = async (config, useCache = true, cacheTTL = 300000) => {
+  const cacheKey = cacheService.getCacheKey(config.url, config.params);
+  
+  // Check for duplicate in-flight requests
+  if (pendingRequests.has(cacheKey)) {
+    return pendingRequests.get(cacheKey);
+  }
+  
+  // Check cache
+  if (useCache) {
+    const cachedData = cacheService.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+  }
+  
+  // Make request
+  const requestPromise = apiClient(config);
+  pendingRequests.set(cacheKey, requestPromise);
+  
+  try {
+    const response = await requestPromise;
+    if (useCache && config.method === 'GET') {
+      cacheService.set(cacheKey, response, cacheTTL);
+    }
+    return response;
+  } finally {
+    pendingRequests.delete(cacheKey);
+  }
+};
+
+// Update apiClient interceptor to use caching for GET requests
+apiClient.interceptors.request.use(
+  (config) => {
+    // Add timestamp to prevent browser cache
+    if (config.method === 'get' && !config.params?.noCache) {
+      config.params = { ...config.params, _t: Date.now() };
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add a test function to verify API connection
+export const testApiConnection = async () => {
+  try {
+    const response = await fetch('http://localhost:5000/health');
+    if (response.ok) {
+      console.log('✅ Backend API is reachable');
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ Cannot connect to backend:', error);
+  }
+  return false;
 };

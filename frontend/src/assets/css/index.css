@@ -228,3 +228,4 @@ input, textarea, select {
 .slide-in {
   animation: slideIn var(--transition-normal);
 }
+
