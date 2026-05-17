@@ -23,21 +23,15 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    """
-    Register a new user
-    """
     try:
         data = request.get_json()
-        
-        # Initialize db manager
         db_manager = DatabaseManager()
         
-        # Validate input
         errors, _ = RequestValidator.validate_request('registration', data)
         if errors:
             return response_error("Validation failed", 400, errors)
         
-        # Register user
+        # 1. Create the core User account
         user, message = db_manager.create_user(
             username=data['username'],
             email=data['email'],
@@ -49,15 +43,20 @@ def register():
         if not user:
             return response_error(message, 409)
         
-        # Create access token
-        access_token = create_access_token(
-            identity=user.id,
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=user.id,
-            expires_delta=timedelta(days=30)
-        )
+        # 2. AUTOMATIC FIX: Auto-initialize student profile to prevent 404 errors
+        try:
+            db_manager.create_student_profile(
+                user_id=user.id,
+                preparation_months=0,
+                daily_study_hours=6.0,
+                attempt_number=1
+            )
+        except Exception as profile_err:
+            current_app.logger.error(f"Profile auto-creation skipped/failed: {str(profile_err)}")
+        
+        # 3. Generate tokens and issue successful response
+        access_token = create_access_token(identity=str(user.id), expires_delta=timedelta(hours=24))
+        refresh_token = create_refresh_token(identity=str(user.id), expires_delta=timedelta(days=30))
         
         return response_success({
             'user': user.to_dict(),

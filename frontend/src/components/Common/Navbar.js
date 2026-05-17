@@ -16,7 +16,7 @@ const Navbar = ({ toggleSidebar, sidebarOpen }) => {
   const userMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { showSuccess } = useNotification();
   const navigate = useNavigate();

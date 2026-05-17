@@ -1,13 +1,12 @@
 /**
  * WeaknessCard Component
- * Displays weak areas and suggestions for improvement
+ * Displays weak areas and updates using cross-compatible backend dictionary keys
  */
 
 import React from 'react';
 import { Link } from 'react-router-dom';
 
 const WeaknessCard = ({ scores }) => {
-  // Define subjects and their display names
   const subjects = [
     { key: 'history_score', name: 'History & Culture', icon: 'fas fa-landmark' },
     { key: 'geography_score', name: 'Geography', icon: 'fas fa-globe' },
@@ -19,41 +18,58 @@ const WeaknessCard = ({ scores }) => {
     { key: 'art_culture_score', name: 'Art & Culture', icon: 'fas fa-palette' }
   ];
 
-  // Get weak subjects (score < 60)
+  // FIXED: Checks for both appended front-end labels and raw database dict keywords
+  const getSubjectScore = (subject) => {
+    if (scores?.[subject.key] !== undefined) {
+      return scores[subject.key];
+    }
+    const simplifiedKey = subject.key.replace('_score', '');
+    if (scores?.[simplifiedKey] !== undefined) {
+      return scores[simplifiedKey];
+    }
+    return 0; // Fallback to 0 if no mock test scores have been posted yet
+  };
+
   const weakSubjects = subjects
     .map(subject => ({
       ...subject,
-      score: scores?.[subject.key] || 0
+      score: getSubjectScore(subject)
     }))
-    .filter(subject => subject.score < 60)
+    .filter(subject => subject.score > 0 && subject.score < 60) // Only shows true weak categories
     .sort((a, b) => a.score - b.score);
 
-  // Get strong subjects (score >= 75)
   const strongSubjects = subjects
     .map(subject => ({
       ...subject,
-      score: scores?.[subject.key] || 0
+      score: getSubjectScore(subject)
     }))
     .filter(subject => subject.score >= 75)
     .sort((a, b) => b.score - a.score);
 
-  // Get severity class based on score
   const getSeverityClass = (score) => {
     if (score < 40) return 'high';
     if (score < 55) return 'medium';
     return 'low';
   };
 
-  // Get improvement message based on score
   const getImprovementMessage = (score, subjectName) => {
-    if (score < 40) {
-      return `Start with NCERT basics for ${subjectName}. Focus on fundamental concepts.`;
-    }
-    if (score < 55) {
-      return `Review standard books for ${subjectName}. Practice topic-wise questions.`;
-    }
-    return `Good progress in ${subjectName}! Focus on advanced topics and PYQs.`;
+    if (score < 40) return `Start with NCERT basics for ${subjectName}. Focus on fundamental concepts.`;
+    if (score < 55) return `Review standard reference textbooks for ${subjectName}. Practice sectional tests.`;
+    return `Good progress in ${subjectName}! Focus on advanced topics and core micro-syllabus PYQs.`;
   };
+
+  // Determine if the scores dictionary is completely empty or newly generated
+  const hasNoDataAtAll = subjects.every(s => getSubjectScore(s) === 0);
+
+  if (hasNoDataAtAll) {
+    return (
+      <div className="empty-state" style={{ padding: '25px', textAlign: 'center' }}>
+        <i className="fas fa-chart-line" style={{ fontSize: '26px', color: '#bbb' }}></i>
+        <p style={{ marginTop: '10px', color: '#666' }}>Complete a mock test to see your analytics dashboard performance evaluation.</p>
+        <Link to="/mock-tests" className="btn btn-primary btn-sm mt-3">Take Mock Test</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="weakness-analysis">
@@ -85,36 +101,27 @@ const WeaknessCard = ({ scores }) => {
           </div>
         </>
       ) : (
-        <div className="no-weaknesses">
-          <i className="fas fa-check-circle"></i>
-          <p>Excellent! No major weaknesses identified.</p>
-          <p className="small-text">Keep maintaining your performance across all subjects.</p>
+        <div className="no-weaknesses" style={{ padding: '15px 0' }}>
+          <i className="fas fa-check-circle" style={{ color: '#27ae60' }}></i>
+          <p style={{ display: 'inline-block', marginLeft: '8px', fontWeight: '600', color: '#27ae60' }}>
+            Excellent status! No major weaknesses identified.
+          </p>
         </div>
       )}
 
       {strongSubjects.length > 0 && (
         <>
-          <h4 className="mt-4">💪 Your Strengths</h4>
-          <div className="strength-list">
+          <h4 className="mt-4">💪 Strong Areas</h4>
+          <div className="strength-list" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
             {strongSubjects.slice(0, 3).map(subject => (
-              <div key={subject.key} className="strength-item">
-                <i className={subject.icon}></i>
-                <span>{subject.name}</span>
-                <span className="strength-score">{Math.round(subject.score)}%</span>
+              <div key={subject.key} className="strength-item" style={{ background: '#27ae6015', padding: '8px 12px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className={subject.icon} style={{ color: '#27ae60' }}></i>
+                <span style={{ fontWeight: '500', color: '#333' }}>{subject.name}</span>
+                <span className="strength-score" style={{ fontWeight: '700', color: '#27ae60' }}>{Math.round(subject.score)}%</span>
               </div>
             ))}
           </div>
         </>
-      )}
-
-      {weakSubjects.length === 0 && strongSubjects.length === 0 && (
-        <div className="empty-state">
-          <i className="fas fa-chart-line"></i>
-          <p>Complete a mock test to see your performance analysis</p>
-          <Link to="/mock-tests" className="btn btn-primary btn-sm">
-            Take Mock Test
-          </Link>
-        </div>
       )}
     </div>
   );

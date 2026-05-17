@@ -21,6 +21,7 @@ const Analytics = () => {
   
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('month'); // week, month, all
+  const [testTypeFilter, setTestTypeFilter] = useState('gs');
   const [analyticsData, setAnalyticsData] = useState(null);
   const [performanceTrend, setPerformanceTrend] = useState(null);
   const [weaknessAnalysis, setWeaknessAnalysis] = useState(null);
@@ -37,47 +38,50 @@ const Analytics = () => {
   const fetchAnalyticsData = async () => {
     setLoading(true);
     try {
-      // Fetch all analytics data in parallel
-      const [
-        trendRes,
-        weaknessRes,
-        probabilityRes,
-        scoresRes,
-        mockTrendRes
-      ] = await Promise.all([
-        analyticsAPI.getPerformanceTrend(),
-        analyticsAPI.getWeaknessAnalysis(),
-        analyticsAPI.getSuccessProbability(),
-        scoresAPI.getLatestScores(),
-        mockTestsAPI.getMockTestTrend()
-      ]);
+      // Helper function to safely fetch data without throwing errors to the main block
+      const fetchSafely = async (apiFunc, defaultData = null) => {
+        try {
+          const res = await apiFunc();
+          return res?.data || defaultData;
+        } catch (error) {
+          console.warn(`API call failed silently:`, error);
+          return defaultData;
+        }
+      };
 
-      setPerformanceTrend(trendRes?.data);
-      setWeaknessAnalysis(weaknessRes?.data);
-      setSuccessProbability(probabilityRes?.data);
-      setSubjectScores(scoresRes?.data?.scores || {});
-      setMockTestTrend(mockTrendRes?.data);
+      // Fetch all analytics data independently
+      const performanceTrend = await fetchSafely(analyticsAPI.getPerformanceTrend);
+      const weaknessAnalysis = await fetchSafely(analyticsAPI.getWeaknessAnalysis);
+      const successProbability = await fetchSafely(analyticsAPI.getSuccessProbability);
+      const scoresRes = await fetchSafely(scoresAPI.getLatestScores);
+      const mockTestTrend = await fetchSafely(mockTestsAPI.getMockTestTrend);
+
+      // Set the state with actual data (or null/empty objects if they failed)
+      setPerformanceTrend(performanceTrend);
+      setWeaknessAnalysis(weaknessAnalysis);
+      setSuccessProbability(successProbability);
+      setSubjectScores(scoresRes?.scores || {});
+      setMockTestTrend(mockTestTrend);
       
-      // Generate comparison data (mock for now)
+      // Generate comparison data dynamically based on real scores
+      const yourScore = scoresRes?.scores?.overall_score || 0;
       setComparisonData({
         peer_average: 62.5,
         top_performer: 85.3,
-        your_score: scoresRes?.data?.scores?.overall_score || 55,
-        percentile: 65
+        your_score: yourScore,
+        percentile: yourScore > 0 ? Math.round((yourScore / 85.3) * 100) : 0
       });
       
     } catch (error) {
-      console.error('Error fetching analytics data:', error);
-      showError('Failed to load analytics data');
-      
-      // Set mock data for demo
-      setMockAnalyticsData();
+      console.error('Critical error fetching analytics data:', error);
+      showError('Failed to load analytics dashboard');
+      // DO NOT call setMockAnalyticsData() here anymore, let it show empty states
     } finally {
       setLoading(false);
     }
   };
 
-  const setMockAnalyticsData = () => {
+  /*const setMockAnalyticsData = () => {
     setPerformanceTrend({
       trend: 'Improving',
       improvement_rate: 8.5,
@@ -149,7 +153,9 @@ const Analytics = () => {
       your_score: 58.5,
       percentile: 42
     });
-  };
+  }; */
+
+  // Line chart for performance trend   
 
   const getChartLabels = () => {
     if (!performanceTrend?.scores_over_time) return [];
@@ -430,111 +436,123 @@ const Analytics = () => {
     </div>
   );
 
-  const renderMockTestsTab = () => (
-    <div className="analytics-tab-content">
-      {/* Mock Test Trend */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Mock Test Performance Trend</h3>
-        </div>
-        <div className="chart-body">
-          <LineChart
-            data={[
-              {
-                label: 'GS Score',
-                values: mockTestTrend?.gs_scores || [],
-                borderColor: '#4a90e2',
-                backgroundColor: 'rgba(74, 144, 226, 0.1)'
-              },
-              {
-                label: 'CSAT Score',
-                values: mockTestTrend?.csat_scores || [],
-                borderColor: '#27ae60',
-                backgroundColor: 'rgba(39, 174, 96, 0.1)'
-              }
-            ]}
-            labels={mockTestTrend?.dates || []}
-            yLabel="Score (out of 200)"
-            height={350}
-          />
-        </div>
-      </div>
+  const renderMockTestsTab = () => {
+    const currentTestData = mockTestTrend?.[testTypeFilter] || { scores: [], dates: [] };
+    const maxScore = 200; 
+    
+    const totalTests = currentTestData.scores.length;
+    const last3Avg = totalTests > 0 
+      ? Math.round(currentTestData.scores.slice(-3).reduce((a, b) => a + b, 0) / Math.min(3, totalTests)) 
+      : 0;
+    const overallImprovement = totalTests > 1 
+      ? Math.round(currentTestData.scores[totalTests - 1] - currentTestData.scores[0]) 
+      : 0;
 
-      {/* Mock Test Analysis */}
-      <div className="stats-grid-two">
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Test Analysis</h3>
-          </div>
-          <div className="test-analysis">
-            <div className="analysis-item">
-              <div className="analysis-value">{mockTestTrend?.gs_scores?.length || 0}</div>
-              <div className="analysis-label">Total Tests Taken</div>
-            </div>
-            <div className="analysis-item">
-              <div className="analysis-value">
-                {Math.round((mockTestTrend?.gs_scores?.slice(-3)?.reduce((a,b) => a+b, 0) / 3) || 0)}
-              </div>
-              <div className="analysis-label">Last 3 Tests Avg (GS)</div>
-            </div>
-            <div className="analysis-item">
-              <div className="analysis-value">
-                {mockTestTrend?.gs_scores?.length > 1 ? 
-                  Math.round(mockTestTrend.gs_scores[mockTestTrend.gs_scores.length - 1] - mockTestTrend.gs_scores[0]) : 0}
-              </div>
-              <div className="analysis-label">Overall Improvement</div>
+    return (
+      <div className="analytics-tab-content">
+        {/* Toggle Switch GS / CSAT - Wrapped inside native theme containers */}
+        <div className="chart-card" style={{ marginBottom: '20px' }}>
+          <div className="chart-header" style={{ borderBottom: 'none' }}>
+            <h3 className="chart-title">Select Test Component</h3>
+            <div className="chart-actions">
+              <button 
+                className={`chart-action-btn ${testTypeFilter === 'gs' ? 'active' : ''}`}
+                onClick={() => setTestTypeFilter('gs')}
+              >
+                General Studies (GS)
+              </button>
+              <button 
+                className={`chart-action-btn ${testTypeFilter === 'csat' ? 'active' : ''}`}
+                onClick={() => setTestTypeFilter('csat')}
+              >
+                CSAT Aptitude
+              </button>
             </div>
           </div>
         </div>
 
+        {/* Mock Test Trend Line Chart */}
         <div className="chart-card">
           <div className="chart-header">
-            <h3 className="chart-title">Recommendations</h3>
-          </div>
-          <div className="test-recommendations">
-            <ul>
-              <li>
-                <i className="fas fa-chart-line"></i>
-                <span>Take at least 2 mock tests per week for better preparation</span>
-              </li>
-              <li>
-                <i className="fas fa-clock"></i>
-                <span>Analyze each mock test for 2-3 hours to identify weak areas</span>
-              </li>
-              <li>
-                <i className="fas fa-book"></i>
-                <span>Maintain an error log to track recurring mistakes</span>
-              </li>
-              <li>
-                <i className="fas fa-target"></i>
-                <span>Set a target score for each mock test and work towards it</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Predicted Trend */}
-      {mockTestTrend?.gs_scores && mockTestTrend.gs_scores.length >= 3 && (
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Predicted Performance</h3>
+            <h3 className="chart-title">{testTypeFilter.toUpperCase()} Performance Trend</h3>
           </div>
           <div className="chart-body">
-            <MockTestTrendChart
-              actualScores={mockTestTrend.gs_scores}
-              predictedScores={[
-                mockTestTrend.gs_scores[mockTestTrend.gs_scores.length - 1] + 5,
-                mockTestTrend.gs_scores[mockTestTrend.gs_scores.length - 1] + 8,
-                mockTestTrend.gs_scores[mockTestTrend.gs_scores.length - 1] + 12
-              ]}
-              testNumbers={mockTestTrend.dates}
-            />
+            {totalTests > 0 ? (
+              <LineChart
+                data={[
+                  {
+                    label: `${testTypeFilter.toUpperCase()} Score`,
+                    values: currentTestData.scores,
+                    borderColor: testTypeFilter === 'gs' ? '#4a90e2' : '#27ae60',
+                    backgroundColor: testTypeFilter === 'gs' ? 'rgba(74, 144, 226, 0.1)' : 'rgba(39, 174, 96, 0.1)'
+                  }
+                ]}
+                labels={currentTestData.dates}
+                yLabel={`Score (out of ${maxScore})`}
+                height={350}
+              />
+            ) : (
+               <div className="empty-state text-center p-5">
+                 <i className="fas fa-clipboard-list text-muted fa-3x mb-3"></i>
+                 <p style={{ margin: '15px 0 0 0' }}>No {testTypeFilter.toUpperCase()} mock tests recorded yet.</p>
+               </div>
+            )}
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Mock Test Stat Analysis Cards */}
+        <div className="stats-grid-two">
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">{testTypeFilter.toUpperCase()} Metrics</h3>
+            </div>
+            <div className="test-analysis">
+              <div className="analysis-item">
+                <div className="analysis-value">{totalTests}</div>
+                <div className="analysis-label">Tests Taken</div>
+              </div>
+              <div className="analysis-item">
+                <div className="analysis-value">{last3Avg}</div>
+                <div className="analysis-label">Last 3 Tests Avg</div>
+              </div>
+              <div className="analysis-item">
+                <div className="analysis-value" style={{ color: overallImprovement >= 0 ? '#27ae60' : '#e74c3c' }}>
+                  {overallImprovement > 0 ? '+' : ''}{overallImprovement}
+                </div>
+                <div className="analysis-label">Overall Improvement</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">AI Preparation Insights</h3>
+            </div>
+            <div className="test-recommendations">
+              <ul>
+                {testTypeFilter === 'csat' && last3Avg < 66 && totalTests > 0 && (
+                  <li style={{ color: '#e74c3c', marginBottom: '10px' }}>
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <span><strong>Alert:</strong> Your average is below the 33% (66 marks) qualification threshold!</span>
+                  </li>
+                )}
+                <li>
+                  <i className="fas fa-chart-line"></i>
+                  <span>Maintain a steady schedule of 2 {testTypeFilter.toUpperCase()} tests a week.</span>
+                </li>
+                <li>
+                  <i className="fas fa-clock"></i>
+                  <span>Dedicate time to evaluating unattempted questions.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+      
 
   const renderComparisonTab = () => (
     <div className="analytics-tab-content">

@@ -106,7 +106,7 @@
   justify-content: space-between;
   position: sticky;
   top: 0;
-  z-index: 99;
+  z-index: 1010;
 }
 
 .menu-toggle {
@@ -205,6 +205,8 @@
 /* Dashboard Content */
 .dashboard-content {
   padding: var(--spacing-lg);
+  width: 100%;
+  flex: 1;
 }
 
 /* Stats Cards */
@@ -551,9 +553,9 @@
   background: white;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 1000;
+  z-index: 2050;
   margin-top: var(--spacing-sm);
-  overflow: hidden;
+  overflow: visible !important;
 }
 
 .notification-dropdown {
@@ -4202,4 +4204,23 @@ a, .btn-link {
 /* Ensure chart labels are visible */
 .chart-title, .trend-indicator span {
   color: var(--gray-800);
+}
+
+/* Update the section at the bottom of dashboard.css to this: */
+.card-title,
+.card-header h3,
+.stat-label,
+.stat-value,
+.weakness-name,
+.weakness-score,
+.activity-title {
+  color: var(--gray-800) !important;
+}
+
+/* Ensure text on dark colored cards/banners remains cleanly readable (White) */
+.welcome-section .welcome-title,
+.welcome-section .welcome-subtitle,
+.motivation-card .quote-text,
+.motivation-card .quote-author {
+  color: #ffffff !important;
 }

@@ -1,16 +1,14 @@
-/**
- * App.js - Optimized with Code Splitting and Lazy Loading
- */
-
-import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 
-// Import only critical components normally
+// Import Layout Components
 import PrivateRoute from './components/Common/PrivateRoute';
 import Loader from './components/Common/Loader';
+import Sidebar from './components/Common/Sidebar';
+import Navbar from './components/Common/Navbar';
 
-// Lazy load non-critical pages for better initial load time
+// Lazy loaded pages
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
@@ -23,13 +21,29 @@ const StudyLogs = lazy(() => import('./pages/main/StudyLogs'));
 const Profile = lazy(() => import('./pages/main/Profile'));
 const Settings = lazy(() => import('./pages/main/Settings'));
 
-// Admin pages - lazy loaded
+// Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AllStudents = lazy(() => import('./pages/admin/AllStudents'));
 const StudentDetail = lazy(() => import('./pages/admin/StudentDetail'));
 const SystemStats = lazy(() => import('./pages/admin/SystemStats'));
 
-// Performance monitoring
+// Reusable Layout Wrapper for Protected Routes
+const DashboardLayout = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="dashboard-container">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="main-content" style={{ flexGrow: 1, width: '100%' }}>
+        <Navbar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} sidebarOpen={sidebarOpen} />
+        <main style={{ padding: '20px' }}>
+          <Outlet /> {/* This renders the individual child page components */}
+        </main>
+      </div>
+    </div>
+  );
+};
+
 const ReportWebVitals = () => {
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') {
@@ -48,7 +62,6 @@ const ReportWebVitals = () => {
 function App() {
   const location = useLocation();
 
-  // Scroll to top on route change
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
@@ -71,21 +84,23 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
-          {/* Protected Routes - Student */}
-          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/recommendations" element={<PrivateRoute><Recommendations /></PrivateRoute>} />
-          <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
-          <Route path="/mock-tests" element={<PrivateRoute><MockTests /></PrivateRoute>} />
-          <Route path="/study-logs" element={<PrivateRoute><StudyLogs /></PrivateRoute>} />
-          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-          <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
-          
-          {/* Admin Routes */}
-          <Route path="/admin" element={<PrivateRoute adminOnly><AdminDashboard /></PrivateRoute>} />
-          <Route path="/admin/students" element={<PrivateRoute adminOnly><AllStudents /></PrivateRoute>} />
-          <Route path="/admin/students/:id" element={<PrivateRoute adminOnly><StudentDetail /></PrivateRoute>} />
-          <Route path="/admin/stats" element={<PrivateRoute adminOnly><SystemStats /></PrivateRoute>} />
+          {/* Protected Routes inside Layout Shell */}
+          <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/recommendations" element={<Recommendations />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/mock-tests" element={<MockTests />} />
+            <Route path="/study-logs" element={<StudyLogs />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            
+            {/* Admin Sub-Routes */}
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/students" element={<AllStudents />} />
+            <Route path="/admin/students/:id" element={<StudentDetail />} />
+            <Route path="/admin/stats" element={<SystemStats />} />
+          </Route>
           
           {/* 404 Fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -29,34 +29,48 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state
   useEffect(() => {
-    const initAuth = async () => {
+  const initAuth = async () => {
+    try {
       setLoading(true);
       
-      // Check if user is already logged in
-      const storedUser = authHelpers.getCurrentUser();
       const token = authHelpers.getAccessToken();
+      const storedUser = authHelpers.getCurrentUser();
       
-      if (storedUser && token) {
-        setUser(storedUser);
-        setIsAuthenticated(true);
-        setIsAdmin(storedUser.is_admin === true);
-        
-        // Check if token needs refresh
+      if (token && storedUser) {
+        // Double-check expiration before setting authenticated state true
         if (authHelpers.isTokenExpiring()) {
           try {
             await authHelpers.refreshAccessToken();
-          } catch (error) {
-            console.error('Token refresh failed:', error);
-            handleLogout();
+            setUser(authHelpers.getCurrentUser());
+            setIsAuthenticated(true);
+            setIsAdmin(authHelpers.getCurrentUser()?.is_admin === true);
+          } catch (refreshError) {
+            console.error('Automated token refresh failed:', refreshError);
+            // Safe fallback clean out to prevent looping
+            await authHelpers.logout();
+            setUser(null);
+            setIsAuthenticated(false);
+            setIsAdmin(false);
           }
+        } else {
+          setUser(storedUser);
+          setIsAuthenticated(true);
+          setIsAdmin(storedUser.is_admin === true);
         }
+      } else {
+        // Ensure explicitly false if storage variables are blank
+        setIsAuthenticated(false);
       }
-      
-      setLoading(false);
-    };
-    
-    initAuth();
-  }, []);
+    } catch (globalAuthError) {
+      console.error("Auth initialization error caught:", globalAuthError);
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false); // Only release routing guard when all states are resolved
+    }
+  };
+  
+  initAuth();
+}, []);
 
   // Login handler
   const handleLogin = useCallback(async (usernameOrEmail, password) => {

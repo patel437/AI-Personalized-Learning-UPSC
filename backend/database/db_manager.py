@@ -425,16 +425,18 @@ class DatabaseManager:
     
     # ==================== ANALYTICS & REPORTS ====================
     
-    def get_dashboard_data(self, student_id):
+    def get_dashboard_data(self, user_id):
         """Get all data needed for student dashboard"""
-        profile = self.get_student_profile(student_id)
+        # 1. Fetch the student profile using the authenticated user_id
+        profile = self.get_student_profile(user_id)
         if not profile:
             return None
         
-        latest_scores = self.get_latest_scores(student_id)
-        recommendations = self.get_pending_recommendations(student_id, limit=5)
-        mock_trend = self.get_mock_test_trend(student_id)
-        weekly_summary = self.get_weekly_study_summary(student_id)
+        # 2. FIXED: Use profile.id for all performance records, NOT user_id
+        latest_scores = self.get_latest_scores(profile.id)
+        recommendations = self.get_pending_recommendations(profile.id, limit=5)
+        mock_trend = self.get_mock_test_trend(profile.id)
+        weekly_summary = self.get_weekly_study_summary(profile.id)
         
         return {
             'profile': profile.to_dict() if hasattr(profile, 'to_dict') else {'id': profile.id},

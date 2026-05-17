@@ -10,6 +10,7 @@ from datetime import datetime, date
 import pandas as pd
 
 from ..database.db_manager import DatabaseManager
+from ..database.models import StudyLog
 from ..services.data_preprocessing import DataPreprocessingService
 from ..services.analytics_service import AnalyticsService
 from ..services.notification_service import NotificationService
@@ -442,42 +443,8 @@ def mark_recommendation_completed(rec_id):
 @jwt_required()
 def save_mock_test():
     """
-    Save mock test result
-    ---
-    tags:
-      - Mock Tests
-    parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          type: object
-          required:
-            - test_name
-            - gs_score
-            - csat_score
-          properties:
-            test_name:
-              type: string
-            gs_score:
-              type: number
-            csat_score:
-              type: number
-            accuracy:
-              type: number
-            time_taken:
-              type: integer
-            questions_attempted:
-              type: integer
-            correct_answers:
-              type: integer
-            wrong_answers:
-              type: integer
-            subject_wise_scores:
-              type: object
-    responses:
-      200:
-        description: Mock test saved successfully
+    Save mock test result (Supports independent GS or CSAT submissions)
+    Protects against database NOT NULL constraint failures on tracking metrics.
     """
     try:
         user_id = get_jwt_identity()
@@ -486,29 +453,65 @@ def save_mock_test():
         if not profile:
             return response_error("Student profile not found", 404)
         
-        data = request.get_json()
+        data = request.get_json() or {}
         
-        # Validate mock test data
-        errors = RequestValidator.validate_request('mock_test', data)[0]
-        if errors:
-            return response_error("Validation failed", 400, errors)
+        # 1. Handle Core Scores (Must be float or None to preserve trend averages)
+        gs_score = data.get('gs_score')
+        if gs_score == "" or gs_score is None:
+            gs_score = None
+        else:
+            gs_score = float(gs_score)
+            
+        csat_score = data.get('csat_score')
+        if csat_score == "" or csat_score is None:
+            csat_score = None
+        else:
+            csat_score = float(csat_score)
+
+        # Guardrail: Ensure at least one exam score is provided
+        if gs_score is None and csat_score is None:
+            return response_error("Validation failed: Must provide either a GS score or a CSAT score", 400)
         
-        # Save mock test
+        # 2. Handle Performance Metadata (Convert empty values to 0 to prevent NOT NULL database crashes)
+        def clean_numeric(val, default_type=int):
+            if val == "" or val is None:
+                return default_type(0)
+            try:
+                return default_type(float(val)) if default_type == float else default_type(int(val))
+            except (ValueError, TypeError):
+                return default_type(0)
+
+        accuracy = clean_numeric(data.get('accuracy'), float)
+        time_taken = clean_numeric(data.get('time_taken'), int)
+        questions_attempted = clean_numeric(data.get('questions_attempted'), int)
+        correct_answers = clean_numeric(data.get('correct_answers'), int)
+        
+        # Automatically calculate wrong answers if not supplied by frontend
+        wrong_answers = data.get('wrong_answers')
+        if wrong_answers == "" or wrong_answers is None:
+            if questions_attempted > 0 and correct_answers > 0:
+                wrong_answers = max(0, questions_attempted - correct_answers)
+            else:
+                wrong_answers = 0
+        else:
+            wrong_answers = int(wrong_answers)
+
+        # 3. Direct handoff to storage layer
         mock_test = db_manager.save_mock_test_result(
             student_id=profile.id,
-            test_name=data['test_name'],
-            gs_score=data['gs_score'],
-            csat_score=data['csat_score'],
+            test_name=data.get('test_name') or f"Mock Test ({datetime.now().strftime('%b %d, %Y')})",
+            gs_score=gs_score,
+            csat_score=csat_score,
             subject_wise_scores=data.get('subject_wise_scores'),
-            accuracy=data.get('accuracy'),
-            time_taken=data.get('time_taken'),
-            questions_attempted=data.get('questions_attempted'),
-            correct_answers=data.get('correct_answers'),
-            wrong_answers=data.get('wrong_answers')
+            accuracy=accuracy,
+            time_taken=time_taken,
+            questions_attempted=questions_attempted,
+            correct_answers=correct_answers,
+            wrong_answers=wrong_answers
         )
         
         if not mock_test:
-            return response_error("Failed to save mock test", 400)
+            return response_error("Failed to save mock test result to database", 400)
         
         return response_success({
             'mock_test': mock_test.to_dict()
@@ -557,25 +560,39 @@ def get_mock_tests():
 @api_bp.route('/mock-tests/trend', methods=['GET'])
 @jwt_required()
 def get_mock_test_trend():
-    """
-    Get mock test trend analysis
-    ---
-    tags:
-      - Mock Tests
-    responses:
-      200:
-        description: Trend analysis retrieved successfully
-    """
+    """Get separated GS and CSAT trend analysis"""
     try:
         user_id = get_jwt_identity()
         profile = db_manager.get_student_profile(user_id)
-        
         if not profile:
             return response_error("Student profile not found", 404)
+            
+        # Fetch the history to calculate trends dynamically
+        mock_tests = db_manager.get_mock_test_history(profile.id, limit=20)
         
-        trend = db_manager.get_mock_test_trend(profile.id)
+        # Separate the data, ignoring None/null values so averages aren't ruined
+        gs_data = [
+            {'score': t.gs_score, 'date': t.test_name} 
+            for t in mock_tests if t.gs_score is not None
+        ]
         
-        return response_success(trend, "Trend analysis retrieved")
+        csat_data = [
+            {'score': t.csat_score, 'date': t.test_name} 
+            for t in mock_tests if t.csat_score is not None
+        ]
+        
+        trend_data = {
+            'gs': {
+                'scores': [d['score'] for d in gs_data],
+                'dates': [d['date'] for d in gs_data]
+            },
+            'csat': {
+                'scores': [d['score'] for d in csat_data],
+                'dates': [d['date'] for d in csat_data]
+            }
+        }
+        
+        return response_success(trend_data, "Trend analysis retrieved")
         
     except Exception as e:
         return response_error(f"Failed to get trend: {str(e)}", 500)
@@ -664,6 +681,33 @@ def add_study_log():
     except Exception as e:
         return response_error(f"Failed to save study log: {str(e)}", 500)
 
+@api_bp.route('/study-logs', methods=['GET'])
+@jwt_required()
+def get_all_individual_logs():
+    """
+    Get individual study log history for the current student
+    """
+    try:
+        user_id = get_jwt_identity()
+        profile = db_manager.get_student_profile(user_id)
+        
+        if not profile:
+            return response_error("Student profile not found", 404)
+        
+        limit = request.args.get('limit', 20, type=int)
+        
+        # Query logs directly from database table sorted by date
+        logs = StudyLog.query.filter_by(student_id=profile.id)\
+                             .order_by(StudyLog.log_date.desc())\
+                             .limit(limit)\
+                             .all()
+        
+        return response_success({
+            'study_logs': [log.to_dict() for log in logs]
+        }, "Individual study logs retrieved successfully")
+        
+    except Exception as e:
+        return response_error(f"Failed to fetch study logs: {str(e)}", 500)
 
 @api_bp.route('/study-logs/weekly', methods=['GET'])
 @jwt_required()
@@ -751,7 +795,14 @@ def get_weakness_analysis():
         latest_scores = db_manager.get_latest_scores(profile.id)
         
         if not latest_scores:
-            return response_error("No scores available for analysis", 404)
+        # Return default empty data instead of 404
+          return response_success({
+              'weak_subjects': {},
+              'weak_count': 0,
+              'high_priority_count': 0,
+              'medium_priority_count': 0,
+              'low_priority_count': 0
+          }, "No scores available yet")
         
         # Generate weakness analysis
         weakness_analysis = analytics_service.analyze_weaknesses(
@@ -787,7 +838,12 @@ def get_success_probability():
         latest_scores = db_manager.get_latest_scores(profile.id)
         
         if not latest_scores:
-            return response_error("No scores available for analysis", 404)
+          return response_success({
+              'probability': 0,
+              'category': 'N/A',
+              'message': 'Take your first mock test to generate your success probability.',
+              'factors': { 'score_factor': 0, 'study_factor': 0, 'mock_factor': 0, 'consistency_factor': 0 }
+          }, "No scores available yet")
         
         # Prepare student data
         student_data = {

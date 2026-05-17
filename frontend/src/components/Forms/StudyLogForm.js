@@ -1,6 +1,6 @@
 /**
  * Study Log Form Component
- * Form for logging daily study hours
+ * Form for logging daily study hours with standard subject mapping translation
  */
 
 import React, { useState } from 'react';
@@ -13,9 +13,32 @@ const SUBJECTS = [
   'Data Interpretation', 'Decision Making'
 ];
 
+// FIXED: Exact translation mapping dictionary from Frontend UI labels to Backend canonical keys
+const SUBJECT_MAP = {
+  'History': 'history',
+  'Geography': 'geography',
+  'Polity': 'polity',
+  'Economy': 'economy',
+  'Science & Tech': 'science_tech',
+  'Environment': 'environment',
+  'Current Affairs': 'current_affairs',
+  'Art & Culture': 'art_culture',
+  'Comprehension': 'comprehension',
+  'Logical Reasoning': 'logical_reasoning',
+  'Quantitative Aptitude': 'quantitative',
+  'Data Interpretation': 'data_interpretation',
+  'Decision Making': 'decision_making'
+};
+
 const StudyLogForm = ({ onSubmit, onCancel, initialData = {} }) => {
+  const formatInitialDate = () => {
+    if (!initialData.log_date) return new Date().toISOString().split('T')[0];
+    const d = new Date(initialData.log_date);
+    return d.toISOString().split('T')[0];
+  };
+
   const [formData, setFormData] = useState({
-    log_date: initialData.log_date || new Date().toISOString().split('T')[0],
+    log_date: formatInitialDate(),
     study_hours: initialData.study_hours || '',
     subjects_studied: initialData.subjects_studied || [],
     quizzes_taken: initialData.quizzes_taken || 0,
@@ -47,7 +70,6 @@ const StudyLogForm = ({ onSubmit, onCancel, initialData = {} }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
     newErrors.log_date = validateRequired(formData.log_date, 'Date');
     newErrors.study_hours = validateStudyHours(formData.study_hours);
     
@@ -61,11 +83,23 @@ const StudyLogForm = ({ onSubmit, onCancel, initialData = {} }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
     
     setLoading(true);
-    await onSubmit(formData);
+
+    // FIXED: Convert UI selected labels to clear lowercase canonical strings for the database
+    const backendMappedSubjects = formData.subjects_studied.map(
+      uiLabel => SUBJECT_MAP[uiLabel] || uiLabel.toLowerCase()
+    );
+
+    const sanitizedPayload = {
+      ...formData,
+      study_hours: parseFloat(formData.study_hours),
+      quizzes_taken: parseInt(formData.quizzes_taken, 10) || 0,
+      subjects_studied: backendMappedSubjects // Swapped to use sanitized backend strings
+    };
+
+    await onSubmit(sanitizedPayload);
     setLoading(false);
   };
 
@@ -128,7 +162,7 @@ const StudyLogForm = ({ onSubmit, onCancel, initialData = {} }) => {
         </div>
 
         <div className="form-group">
-          <label className="checkbox-label">
+          <label className="checkbox-label" style={{ marginTop: '35px', display: 'block' }}>
             <input
               type="checkbox"
               name="notes_taken"

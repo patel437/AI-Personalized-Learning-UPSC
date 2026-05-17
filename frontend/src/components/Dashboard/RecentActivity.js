@@ -1,11 +1,10 @@
 /**
  * RecentActivity Component
- * Shows recent study logs, mock tests, and achievements
+ * Shows live recent study logs, mock tests, and achievements from database records
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { formatDate } from '../../assets/js/utils';
 import { studyLogsAPI, mockTestsAPI } from '../../assets/js/api';
 import Loader from '../Common/Loader';
 
@@ -13,21 +12,17 @@ const RecentActivity = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchRecentActivities();
-  }, []);
-
-  const fetchRecentActivities = async () => {
+  // FIXED: Fetch real live database logs and mock entries in parallel safely
+  const fetchRecentActivities = useCallback(async () => {
     try {
-      // Fetch study logs and mock tests in parallel
       const [studyRes, mockRes] = await Promise.all([
-        studyLogsAPI.getWeeklySummary(),
-        mockTestsAPI.getMockTests(5)
+        studyLogsAPI.getIndividualLogs().catch(() => ({ data: { study_logs: [] } })),
+        mockTestsAPI.getMockTests(5).catch(() => ({ data: { mock_tests: [] } }))
       ]);
 
       const activitiesList = [];
 
-      // Add mock tests to activities
+      // 1. Process Live Mock Tests data fields
       const mockTests = mockRes?.data?.mock_tests || [];
       mockTests.forEach(test => {
         activitiesList.push({
@@ -35,86 +30,64 @@ const RecentActivity = () => {
           type: 'mock_test',
           title: `Mock Test: ${test.test_name}`,
           description: `Score: ${test.gs_score} (GS) + ${test.csat_score} (CSAT) = ${test.total_score}`,
-          date: test.test_date,
+          date: test.test_date || test.created_at,
           icon: 'fas fa-file-alt',
           color: '#9b59b6',
-          link: `/mock-tests/${test.id}`
+          link: '/mock-tests'
         });
       });
 
-      // Add study logs to activities (simulated)
-      const studyLogs = [
-        { date: new Date(), hours: 5.5, subjects: ['History', 'Polity'] },
-        { date: new Date(Date.now() - 86400000), hours: 6, subjects: ['Geography', 'Economy'] },
-        { date: new Date(Date.now() - 172800000), hours: 4.5, subjects: ['Science & Tech'] }
-      ];
-
-      studyLogs.forEach((log, index) => {
+      // 2. FIXED: Map real logged study entries instead of the old hardcoded mock array
+      const realStudyLogs = studyRes?.data?.study_logs || [];
+      realStudyLogs.forEach((log) => {
         activitiesList.push({
-          id: `study_${index}`,
+          id: `study_${log.id}`,
           type: 'study',
           title: 'Study Session',
-          description: `Studied ${log.hours} hours: ${log.subjects.join(', ')}`,
-          date: log.date,
+          description: `Studied ${log.study_hours} hours on: ${log.subjects_studied?.join(', ') || 'General Subjects'}`,
+          date: log.log_date,
           icon: 'fas fa-book-open',
           color: '#27ae60',
           link: '/study-logs'
         });
       });
 
-      // Sort by date (newest first)
+      // Sort combined activities by date string values (newest first)
       activitiesList.sort((a, b) => new Date(b.date) - new Date(a.date));
-      
       setActivities(activitiesList.slice(0, 5));
+      
     } catch (error) {
-      console.error('Error fetching activities:', error);
-      // Set mock data
-      setActivities([
-        {
-          id: 1,
-          type: 'mock_test',
-          title: 'Mock Test: UPSC Prelims 2024 - Test 5',
-          description: 'Score: 112/200 (GS) + 85/200 (CSAT)',
-          date: new Date(),
-          icon: 'fas fa-file-alt',
-          color: '#9b59b6'
-        },
-        {
-          id: 2,
-          type: 'study',
-          title: 'Study Session',
-          description: 'Studied 5.5 hours: History, Polity',
-          date: new Date(Date.now() - 86400000),
-          icon: 'fas fa-book-open',
-          color: '#27ae60'
-        },
-        {
-          id: 3,
-          type: 'achievement',
-          title: 'Achievement Unlocked',
-          description: 'Completed 30-day study streak!',
-          date: new Date(Date.now() - 172800000),
-          icon: 'fas fa-trophy',
-          color: '#f39c12'
-        }
-      ]);
+      console.error('Error compiling recent dashboard activities:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Get time ago string
-  const getTimeAgo = (date) => {
+  useEffect(() => {
+    fetchRecentActivities();
+  }, [fetchRecentActivities]);
+
+  // FIXED: Solves time-shifting by parsing pure calendar strings into local timezone midnights
+  const getTimeAgo = (dateValue) => {
     const now = new Date();
-    const diffMs = now - new Date(date);
+    let activityDate;
+    
+    if (typeof dateValue === 'string' && dateValue.includes('-') && !dateValue.includes('T')) {
+      const [year, month, day] = dateValue.split('-').map(Number);
+      activityDate = new Date(year, month - 1, day); 
+    } else {
+      activityDate = new Date(dateValue);
+    }
+
+    const diffMs = now - activityDate;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} minutes ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays === 1) return 'Yesterday';
+    if (diffHours < 24 && now.getDate() === activityDate.getDate()) return `${diffHours} hours ago`;
+    if (diffDays === 1 || (diffDays === 0 && now.getDate() !== activityDate.getDate())) return 'Yesterday';
     return `${diffDays} days ago`;
   };
 
@@ -124,12 +97,10 @@ const RecentActivity = () => {
 
   if (activities.length === 0) {
     return (
-      <div className="empty-state">
-        <i className="fas fa-history"></i>
-        <p>No recent activity</p>
-        <Link to="/study-logs" className="btn btn-primary btn-sm">
-          Log Your First Study Session
-        </Link>
+      <div className="empty-state" style={{ padding: '20px', textAlign: 'center' }}>
+        <i className="fas fa-history" style={{ fontSize: '24px', color: '#ccc' }}></i>
+        <p style={{ marginTop: '10px', color: '#666' }}>No recent activity found.</p>
+        <Link to="/study-logs" className="btn btn-primary btn-sm mt-2">Log Study Hours</Link>
       </div>
     );
   }
@@ -156,12 +127,6 @@ const RecentActivity = () => {
           )}
         </div>
       ))}
-      
-      <div className="view-all">
-        <Link to="/study-logs" className="btn-link">
-          View All Activity <i className="fas fa-arrow-right"></i>
-        </Link>
-      </div>
     </div>
   );
 };

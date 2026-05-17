@@ -1,20 +1,18 @@
 /**
  * Study Logs Page
- * Track daily study hours and view study history
+ * Track daily study hours, view study history, and modify logged entries
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { studyLogsAPI } from '../../assets/js/api';
 import { formatDate } from '../../assets/js/utils';
-import Loader, { CardSkeleton } from '../../components/Common/Loader';
+import { CardSkeleton } from '../../components/Common/Loader';
 import Modal from '../../components/Common/Modal';
 import StudyLogForm from '../../components/Forms/StudyLogForm';
 
 const StudyLogs = () => {
-  const { user } = useAuth();
   const { showSuccess, showError } = useNotification();
   
   const [loading, setLoading] = useState(true);
@@ -22,56 +20,57 @@ const StudyLogs = () => {
   const [studyLogs, setStudyLogs] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [editingLog, setEditingLog] = useState(null);
 
-  useEffect(() => {
-    fetchStudyData();
-  }, []);
-
-  const fetchStudyData = async () => {
+  // Fetches log data from backend and defaults missing elements to zero safely
+  const fetchStudyData = useCallback(async () => {
     setLoading(true);
     try {
       const summaryRes = await studyLogsAPI.getWeeklySummary();
       setWeeklySummary(summaryRes?.data);
       
-      // Fetch recent study logs
-      // For demo, using mock data
-      setStudyLogs(mockStudyLogs);
+      const logsRes = await studyLogsAPI.getIndividualLogs();
+      setStudyLogs(logsRes?.data?.study_logs || []);
       
     } catch (error) {
       console.error('Error fetching study data:', error);
       showError('Failed to load study data');
       
-      // Set mock data
       setWeeklySummary({
-        total_hours: 32.5,
-        average_daily_hours: 4.6,
-        days_studied: 5,
-        streak: 4,
-        consistency_score: 72
+        total_hours: 0,
+        average_daily_hours: 0,
+        days_studied: 0,
+        streak: 0
       });
-      setStudyLogs(mockStudyLogs);
+      setStudyLogs([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    fetchStudyData();
+  }, [fetchStudyData]);
 
   const handleAddLog = async (logData) => {
     try {
       const response = await studyLogsAPI.addStudyLog(logData);
-      if (response?.data?.study_log) {
-        showSuccess('Study log added successfully!');
+      if (response) {
+        showSuccess(editingLog ? 'Study log modified successfully!' : 'Study log added successfully!');
         setShowAddModal(false);
+        setEditingLog(null);
+        setSelectedDate(null);
         fetchStudyData();
       }
     } catch (error) {
-      showError(error?.message || 'Failed to add study log');
+      showError(error?.message || 'Failed to save study log entry');
     }
   };
 
   const getWeekDays = () => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const today = new Date();
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 1));
+    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)));
     
     return days.map((day, index) => {
       const date = new Date(startOfWeek);
@@ -80,14 +79,6 @@ const StudyLogs = () => {
     });
   };
 
-  const mockStudyLogs = [
-    { id: 1, log_date: '2024-03-04', study_hours: 5.5, subjects_studied: ['History', 'Polity'], quizzes_taken: 2, quiz_scores: [75, 82] },
-    { id: 2, log_date: '2024-03-05', study_hours: 6, subjects_studied: ['Geography', 'Economy'], quizzes_taken: 3, quiz_scores: [68, 72, 85] },
-    { id: 3, log_date: '2024-03-06', study_hours: 4.5, subjects_studied: ['Science & Tech', 'Environment'], quizzes_taken: 1, quiz_scores: [70] },
-    { id: 4, log_date: '2024-03-07', study_hours: 7, subjects_studied: ['Polity', 'Current Affairs'], quizzes_taken: 4, quiz_scores: [88, 76, 82, 79] },
-    { id: 5, log_date: '2024-03-08', study_hours: 3.5, subjects_studied: ['History'], quizzes_taken: 1, quiz_scores: [65] }
-  ];
-
   if (loading) {
     return (
       <>
@@ -95,9 +86,7 @@ const StudyLogs = () => {
           <title>Study Logs | UPSC Learning System</title>
         </Helmet>
         <div className="studylogs-container">
-          <div className="page-header">
-            <CardSkeleton />
-          </div>
+          <div className="page-header"><CardSkeleton /></div>
           <div className="stats-grid">
             {[1, 2, 3, 4].map(i => <CardSkeleton key={i} />)}
           </div>
@@ -115,26 +104,24 @@ const StudyLogs = () => {
       </Helmet>
 
       <div className="studylogs-container">
-        {/* Header */}
+        {/* Header Options */}
         <div className="page-header">
           <div className="header-left">
             <h1 className="page-title">
               <i className="fas fa-book-open"></i>
               <span>Study Logs</span>
             </h1>
-            <p className="page-subtitle">
-              Track your daily study hours and maintain consistency
-            </p>
+            <p className="page-subtitle">Track your daily study hours and maintain consistency</p>
           </div>
           <div className="header-right">
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-primary" onClick={() => { setEditingLog(null); setShowAddModal(true); }}>
               <i className="fas fa-plus"></i>
               <span>Log Study Hours</span>
             </button>
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Dynamic Summary Cards */}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-icon"><i className="fas fa-clock"></i></div>
@@ -143,7 +130,7 @@ const StudyLogs = () => {
           </div>
           <div className="stat-card">
             <div className="stat-icon"><i className="fas fa-chart-line"></i></div>
-            <div className="stat-value">{weeklySummary?.average_daily_hours?.toFixed(1) || 0}</div>
+            <div className="stat-value">{weeklySummary?.average_daily_hours || 0}</div>
             <div className="stat-label">Avg Daily Hours</div>
           </div>
           <div className="stat-card">
@@ -158,7 +145,7 @@ const StudyLogs = () => {
           </div>
         </div>
 
-        {/* Weekly Calendar View */}
+        {/* Interactive Weekly Calendar Section */}
         <div className="card">
           <div className="card-header">
             <h3 className="card-title">
@@ -193,7 +180,7 @@ const StudyLogs = () => {
                       </div>
                     )}
                     {hours === 0 && (
-                      <button className="btn-add-log" onClick={() => setSelectedDate(day.date)}>
+                      <button className="btn-add-log" onClick={() => { setSelectedDate(day.date); setEditingLog(null); setShowAddModal(true); }}>
                         <i className="fas fa-plus"></i>
                       </button>
                     )}
@@ -204,7 +191,7 @@ const StudyLogs = () => {
           </div>
         </div>
 
-        {/* Recent Study Logs Table */}
+        {/* Dynamic Study Logs Table Summary */}
         <div className="card">
           <div className="card-header">
             <h3 className="card-title">
@@ -226,47 +213,56 @@ const StudyLogs = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {studyLogs.map((log) => {
-                    const avgScore = log.quiz_scores?.length ? 
-                      Math.round(log.quiz_scores.reduce((a, b) => a + b, 0) / log.quiz_scores.length) : 0;
-                    
-                    return (
-                      <tr key={log.id}>
-                        <td>{formatDate(log.log_date)}</td>
-                        <td className="study-hours">{log.study_hours} hrs</td>
-                        <td>
-                          <div className="subjects-badges">
-                            {log.subjects_studied?.slice(0, 3).map((subject, idx) => (
-                              <span key={idx} className="subject-badge">{subject}</span>
-                            ))}
-                            {log.subjects_studied?.length > 3 && (
-                              <span className="subject-badge more">+{log.subjects_studied.length - 3}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td>{log.quizzes_taken || 0}</td>
-                        <td>
-                          {avgScore > 0 ? (
-                            <span className={`score-badge ${avgScore >= 75 ? 'high' : avgScore >= 60 ? 'medium' : 'low'}`}>
-                              {avgScore}%
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td>
-                          <button className="btn-icon">
-                            <i className="fas fa-edit"></i>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {studyLogs.length > 0 ? (
+                    studyLogs.map((log) => {
+                      const avgScore = log.quiz_scores?.length ? 
+                        Math.round(log.quiz_scores.reduce((a, b) => a + b, 0) / log.quiz_scores.length) : 0;
+                      
+                      return (
+                        <tr key={log.id}>
+                          <td>{formatDate(log.log_date)}</td>
+                          <td className="study-hours">{log.study_hours} hrs</td>
+                          <td>
+                            <div className="subjects-badges">
+                              {log.subjects_studied?.slice(0, 3).map((subject, idx) => (
+                                <span key={idx} className="subject-badge">{subject}</span>
+                              ))}
+                              {log.subjects_studied?.length > 3 && (
+                                <span className="subject-badge more">+{log.subjects_studied.length - 3}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>{log.quizzes_taken || 0}</td>
+                          <td>
+                            {avgScore > 0 ? (
+                              <span className={`score-badge ${avgScore >= 75 ? 'high' : avgScore >= 60 ? 'medium' : 'low'}`}>
+                                {avgScore}%
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td>
+                            <button className="btn-icon" onClick={() => { setEditingLog(log); setShowAddModal(true); }}>
+                              <i className="fas fa-edit"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="empty-state" style={{ padding: '30px', textAlign: 'center' }}>
+                        <i className="fas fa-folder-open" style={{ fontSize: '24px', color: '#ccc' }}></i>
+                        <p style={{ marginTop: '10px', color: '#777' }}>No study logs recorded yet. Previous days safely display as zero.</p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        {/* Study Tips */}
+        {/* Study Tips Card */}
         <div className="tips-card">
           <i className="fas fa-lightbulb"></i>
           <div className="tips-content">
@@ -281,14 +277,18 @@ const StudyLogs = () => {
           </div>
         </div>
 
-        {/* Add Study Log Modal */}
+        {/* Log Study Hours Modal Shell Container */}
         <Modal
           isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          title="Log Study Hours"
+          onClose={() => { setShowAddModal(false); setEditingLog(null); setSelectedDate(null); }}
+          title={editingLog ? "Modify Study Log Entry" : "Log Study Hours"}
           size="medium"
         >
-          <StudyLogForm onSubmit={handleAddLog} onCancel={() => setShowAddModal(false)} />
+          <StudyLogForm 
+            onSubmit={handleAddLog} 
+            onCancel={() => { setShowAddModal(false); setEditingLog(null); setSelectedDate(null); }} 
+            initialData={editingLog || { log_date: selectedDate }}
+          />
         </Modal>
       </div>
     </>

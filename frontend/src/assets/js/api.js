@@ -63,13 +63,15 @@ apiClient.interceptors.response.use(
           }
         }
       } catch (refreshError) {
-        // Refresh failed, logout user
-        storage.clear();
+        // FIXED: Explicitly delete all tokens to prevent redirect loops
+        storage.remove('access_token');
+        storage.remove('refresh_token');
+        storage.remove('user');
+        storage.remove('auth_check_time');
         window.location.href = '/login';
       }
     }
     
-    // Return error response
     return Promise.reject(error.response?.data || error);
   }
 );
@@ -212,6 +214,11 @@ export const studyLogsAPI = {
   // Get weekly study summary
   getWeeklySummary: () => {
     return apiClient.get('/study-logs/weekly');
+  },
+
+  // FIXED: Added method cleanly inside the existing block to prevent compilation errors
+  getIndividualLogs: () => {
+    return apiClient.get('/study-logs');
   }
 };
 
@@ -334,3 +341,4 @@ export const testApiConnection = async () => {
   }
   return false;
 };
+

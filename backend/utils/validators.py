@@ -182,10 +182,18 @@ class StudyLogValidator:
             if not isinstance(data['subjects_studied'], list):
                 errors.append("Subjects studied must be a list")
             else:
-                valid_subjects = ['history', 'geography', 'polity', 'economy',
-                                 'science_tech', 'environment', 'current_affairs',
-                                 'art_culture', 'comprehension', 'logical_reasoning',
-                                 'quantitative', 'data_interpretation', 'decision_making']
+                # FIXED: Expanded options to align with frontend text formatting arrays
+                valid_subjects = [
+                    'history', 'geography', 'polity', 'economy',
+                    'science_tech', 'environment', 'current_affairs',
+                    'art_culture', 'comprehension', 'logical_reasoning',
+                    'quantitative', 'data_interpretation', 'decision_making',
+                    # Frontend UI Label Mapping Alternates
+                    'History', 'Geography', 'Polity', 'Economy',
+                    'Science & Tech', 'Environment', 'Current Affairs', 'Art & Culture',
+                    'Comprehension', 'Logical Reasoning', 'Quantitative Aptitude',
+                    'Data Interpretation', 'Decision Making'
+                ]
                 for subject in data['subjects_studied']:
                     if subject not in valid_subjects:
                         errors.append(f"Invalid subject: {subject}")
@@ -331,20 +339,7 @@ class RequestValidator:
     
     @staticmethod
     def validate_request(validation_type, data=None):
-        """
-        Validate request based on type
-        
-        validation_type can be:
-        - 'student_profile'
-        - 'subject_scores'
-        - 'mock_test'
-        - 'study_log'
-        - 'recommendation'
-        - 'registration'
-        - 'login'
-        - 'password_change'
-        """
-        
+        """Validate request based on type"""
         if data is None:
             data = request.get_json() or {}
         
@@ -363,5 +358,4 @@ class RequestValidator:
             return [], None
         
         errors = validators[validation_type](data)
-        
         return errors, data if not errors else None

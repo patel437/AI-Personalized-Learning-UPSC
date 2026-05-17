@@ -1,6 +1,6 @@
 /**
  * PerformanceChart Component
- * Shows performance trend over time
+ * Shows live performance trends over time for GS and CSAT
  */
 
 import React, { useState } from 'react';
@@ -9,52 +9,67 @@ import LineChart from '../Charts/LineChart';
 const PerformanceChart = ({ analytics }) => {
   const [timeRange, setTimeRange] = useState('month');
 
-  // Mock data - replace with actual API data
+  // Parses database lists dynamically and converts them into 0-100% metrics
   const getChartData = () => {
-    const dates = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'];
-    const scores = [45, 52, 48, 58, 62, 68, 72, 75];
-    const movingAvg = [45, 48.5, 48.3, 50.8, 53, 56.5, 60, 62.3];
-    return { dates, scores, movingAvg };
+    if (analytics && analytics.dates && analytics.dates.length > 0) {
+      // Formats database strings to make labels scannable on smaller device views
+      const dates = analytics.dates.map(d => d.substring(5, 10).replace('-', '/')); 
+      
+      // Converts raw scores (out of 200) to clear percentages
+      const gsPercentages = analytics.gs_scores.map(score => Math.round((score / 200) * 100));
+      const csatPercentages = analytics.csat_scores.map(score => Math.round((score / 200) * 100));
+      
+      return { dates, gsPercentages, csatPercentages, totalTests: dates.length };
+    }
+    
+    // Fallback Mock Data structure if user has not logged any tests yet
+    const dates = ['Mock 1', 'Mock 2', 'Mock 3', 'Mock 4', 'Mock 5'];
+    const gsPercentages = [52, 58, 61, 65, 72];
+    const csatPercentages = [48, 52, 55, 60, 66];
+    return { dates, gsPercentages, csatPercentages, totalTests: 5 };
   };
 
-  const { dates, scores, movingAvg } = getChartData();
+  const { dates, gsPercentages, csatPercentages } = getChartData();
 
   const chartData = [
     {
-      label: 'Actual Score',
-      values: scores,
+      label: 'GS Score (%)',
+      values: gsPercentages,
       borderColor: '#4a90e2',
       backgroundColor: 'rgba(74, 144, 226, 0.1)'
     },
     {
-      label: 'Moving Average',
-      values: movingAvg,
-      borderColor: '#f39c12',
-      backgroundColor: 'transparent',
-      borderDash: [5, 5]
+      label: 'CSAT Score (%)',
+      values: csatPercentages,
+      borderColor: '#27ae60',
+      backgroundColor: 'rgba(39, 174, 96, 0.1)'
     }
   ];
 
   const getTrendAnalysis = () => {
-    const lastScore = scores[scores.length - 1];
-    const firstScore = scores[0];
-    const improvement = lastScore - firstScore;
-    if (improvement > 5) return { text: 'Improving', color: '#27ae60', icon: 'trending-up' };
-    if (improvement < -5) return { text: 'Declining', color: '#e74c3c', icon: 'trending-down' };
-    return { text: 'Stable', color: '#f39c12', icon: 'trending-flat' };
+    if (gsPercentages.length < 2) return { text: 'Initial State', color: '#f39c12', icon: 'minus' };
+    const improvement = gsPercentages[gsPercentages.length - 1] - gsPercentages[0];
+    if (improvement > 3) return { text: 'Improving Progress', color: '#27ae60', icon: 'trending-up' };
+    if (improvement < -3) return { text: 'Score Decline', color: '#e74c3c', icon: 'trending-down' };
+    return { text: 'Stable Consistency', color: '#4a90e2', icon: 'minus' };
   };
 
   const trend = getTrendAnalysis();
+  const progressDiff = gsPercentages.length >= 2 ? gsPercentages[gsPercentages.length - 1] - gsPercentages[0] : 0;
 
   return (
     <div className="performance-chart">
       <div className="chart-header">
         <div>
-          <h3 className="chart-title">Performance Trend</h3>
+          <h3 className="chart-title">Performance Trend Analysis</h3>
           <div className="trend-indicator">
-            <i className={`fas fa-${trend.icon}`} style={{ color: trend.color }}></i>
-            <span style={{ color: trend.color }}>{trend.text}</span>
-            <span className="trend-value">+{scores[scores.length - 1] - scores[0]} pts</span>
+            <i className={`fas fa-${trend.icon === 'minus' ? 'minus' : trend.icon}`} style={{ color: trend.color }}></i>
+            <span style={{ color: trend.color, marginLeft: '6px', fontWeight: '600' }}>{trend.text}</span>
+            {progressDiff !== 0 && (
+              <span className="trend-value" style={{ marginLeft: '10px' }}>
+                {progressDiff > 0 ? `+${progressDiff}` : progressDiff} percentage points
+              </span>
+            )}
           </div>
         </div>
         <div className="chart-actions">
@@ -66,7 +81,7 @@ const PerformanceChart = ({ analytics }) => {
         </div>
       </div>
       <div className="chart-body">
-        <LineChart data={chartData} labels={dates} yLabel="Score (%)" height={300} />
+        <LineChart data={chartData} labels={dates} yLabel="Score Percentage (%)" height={300} />
       </div>
     </div>
   );
